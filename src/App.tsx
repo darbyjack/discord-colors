@@ -179,8 +179,10 @@ export default function App() {
             <span className="brand-bars" aria-hidden="true"><i /><i /><i /><i /></span>
             Discord Colors
           </a>
-          <a className="source-link" href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">
-            <span>GitHub</span>
+          <a className="source-link" href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+            <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.14.68-3.8-1.33-3.8-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.73 1.17 1.73 1.17 1 1.72 2.62 1.22 3.26.93.1-.73.39-1.22.71-1.5-2.5-.28-5.14-1.25-5.14-5.57 0-1.23.44-2.24 1.17-3.03-.12-.29-.51-1.44.11-3 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16.62 1.56.23 2.71.11 3 .73.79 1.17 1.8 1.17 3.03 0 4.33-2.64 5.28-5.16 5.56.4.35.76 1.04.76 2.1v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z" />
+            </svg>
           </a>
         </div>
       </header>
