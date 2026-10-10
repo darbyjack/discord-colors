@@ -1,21 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Bold,
-  Check,
-  Code2,
-  Copy,
-  ExternalLink,
-  Info,
-  MousePointer2,
-  Palette,
-  RotateCcw,
-  Sparkles,
-  Underline,
-  WandSparkles,
-  X,
-} from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { Bold, Check, Copy, Github, RotateCcw, Underline, X } from 'lucide-react'
 import {
   affectedIndexes,
   BACKGROUND,
@@ -29,74 +14,86 @@ import {
 } from './ansi'
 import type { Color, Glyph, Preset } from './ansi'
 
-const STARTER_TEXT = "You're next."
 const MAX_MESSAGE_LENGTH = 2000
+type CopyState = 'idle' | 'done' | 'error'
 
-type CopyStatus = 'idle' | 'copied' | 'error'
-
-function Swatch({
-  color,
-  chosen,
-  onClick,
-  category,
+function ColorPicker({
+  label,
+  colors,
+  selected,
+  onChoose,
+  onRemove,
+  disabled,
 }: {
-  color: Color
-  chosen: boolean
-  onClick: () => void
-  category: string
+  label: string
+  colors: Color[]
+  selected: number | null | undefined
+  onChoose: (code: number) => void
+  onRemove: () => void
+  disabled: boolean
 }) {
   return (
-    <button
-      type="button"
-      className={`swatch ${chosen ? 'swatch-selected' : ''}`}
-      onClick={onClick}
-      aria-label={`${category}: ${color.label}`}
-      aria-pressed={chosen}
-      title={`${color.label} (ANSI ${color.code})`}
-    >
-      <span className="swatch-color" style={{ backgroundColor: color.hex }} />
-      <span className="swatch-name">{color.label}</span>
-    </button>
+    <div className="color-picker">
+      <div className="control-label">
+        <span>{label}</span>
+        <button type="button" className="quiet-link" onClick={onRemove} disabled={disabled}>
+          No color
+        </button>
+      </div>
+      <div className="color-options" role="group" aria-label={label}>
+        {colors.map((color) => (
+          <button
+            key={color.code}
+            type="button"
+            className={selected === color.code ? 'color-option is-selected' : 'color-option'}
+            disabled={disabled}
+            style={{ '--swatch': color.hex } as CSSProperties}
+            onClick={() => onChoose(color.code)}
+            title={color.label}
+            aria-label={label + ': ' + color.label}
+            aria-pressed={selected === color.code}
+          >
+            <span className="color-tile" />
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
-function PresetCard({
+function PresetButton({
   preset,
-  selected,
+  active,
   onClick,
 }: {
   preset: Preset
-  selected: boolean
+  active: boolean
   onClick: () => void
 }) {
   return (
     <button
       type="button"
-      className={`preset-card ${selected ? 'preset-selected' : ''}`}
+      className={active ? 'preset is-active' : 'preset'}
+      aria-pressed={active}
       onClick={onClick}
-      aria-pressed={selected}
     >
-      <span className="preset-gradient" aria-hidden="true">
-        {preset.colors.map((code, index) => (
-          <span key={index} style={{ backgroundColor: colorHex(code, FOREGROUND, '#fff') }} />
+      <span className="preset-colors" aria-hidden="true">
+        {preset.colors.slice(0, 4).map((code, index) => (
+          <i key={index} style={{ backgroundColor: colorHex(code, FOREGROUND, '#fff') }} />
         ))}
       </span>
-      <span className="preset-title-row">
-        <span className="preset-title">{preset.name}</span>
-        {selected ? <Check size={15} aria-hidden="true" /> : <ArrowUpRight size={15} aria-hidden="true" />}
-      </span>
-      <span className="preset-subtitle">{preset.description}</span>
+      {preset.name}
     </button>
   )
 }
 
 export default function App() {
-  const [glyphs, setGlyphs] = useState<Glyph[]>(() => withPreset(STARTER_TEXT, PRESETS[0]))
-  const [selectedPreset, setSelectedPreset] = useState<string | null>('rainbow')
+  const [glyphs, setGlyphs] = useState<Glyph[]>(() => withPreset("Hello, Discord!", PRESETS[0]))
+  const [activePreset, setActivePreset] = useState<string | null>('rainbow')
   const [selection, setSelection] = useState({ start: 0, end: 0 })
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [copyState, setCopyState] = useState<CopyState>('idle')
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const text = useMemo(() => glyphs.map((glyph) => glyph.char).join(''), [glyphs])
   const output = useMemo(() => encodeDiscord(glyphs), [glyphs])
@@ -105,351 +102,273 @@ export default function App() {
     () => affectedIndexes(glyphs, selection.start, selection.end, activeIndex),
     [glyphs, selection.start, selection.end, activeIndex],
   )
+  const selectionCount = selectedIndexes.length
+  const hasSelection = selection.start !== selection.end
+  const selectedGlyphs = selectedIndexes.map((index) => glyphs[index])
+  const commonForeground =
+    selectionCount > 0 && selectedGlyphs.every((glyph) => glyph.fg === selectedGlyphs[0].fg)
+      ? selectedGlyphs[0].fg
+      : undefined
+  const commonBackground =
+    selectionCount > 0 && selectedGlyphs.every((glyph) => glyph.bg === selectedGlyphs[0].bg)
+      ? selectedGlyphs[0].bg
+      : undefined
+  const isBold = selectionCount > 0 && selectedGlyphs.every((glyph) => glyph.bold)
+  const isUnderlined = selectionCount > 0 && selectedGlyphs.every((glyph) => glyph.underline)
+  const exceedsLimit = output.length > MAX_MESSAGE_LENGTH
+  const containsFence = text.includes('\x60\x60\x60')
+  const canCopy = text.length > 0 && !exceedsLimit && !containsFence
+  const targetLabel = activeIndex !== null
+    ? 'Editing one character'
+    : hasSelection
+      ? 'Editing ' + selectionCount + ' selected characters'
+      : 'Editing entire message'
 
-  const messageLength = output.length
-  const overLimit = messageLength > MAX_MESSAGE_LENGTH
-  const containsFence = text.includes('```')
-  const canCopy = text.length > 0 && !overLimit && !containsFence
-  const scope = selection.start !== selection.end
-    ? `${selectedIndexes.length} selected characters`
-    : activeIndex !== null
-      ? '1 preview character'
-      : 'Entire message'
-
-  function updateText(nextText: string, nextStart: number, nextEnd: number) {
-    const preset = PRESETS.find((item) => item.id === selectedPreset)
-    setGlyphs((previous) =>
-      preset ? withPreset(nextText, preset) : reconcileText(previous, nextText),
-    )
-    setSelection({ start: nextStart, end: nextEnd })
+  function changeText(nextText: string, start: number, end: number) {
+    const preset = PRESETS.find((item) => item.id === activePreset)
+    setGlyphs((previous) => preset ? withPreset(nextText, preset) : reconcileText(previous, nextText))
+    setSelection({ start, end })
     setActiveIndex(null)
-    setCopyStatus('idle')
+    setCopyState('idle')
   }
 
-  function applyToSelection(change: (glyph: Glyph) => Glyph) {
-    const target = new Set(selectedIndexes)
-    setGlyphs((previous) =>
-      previous.map((glyph, index) => (target.has(index) ? change(glyph) : glyph)),
-    )
-    setSelectedPreset(null)
-    setCopyStatus('idle')
+  function changeSelected(change: (glyph: Glyph) => Glyph) {
+    const affected = new Set(selectedIndexes)
+    setGlyphs((previous) => previous.map((glyph, index) => (
+      affected.has(index) ? change(glyph) : glyph
+    )))
+    setActivePreset(null)
+    setCopyState('idle')
   }
 
-  function applyPreset(preset: Preset) {
+  function usePreset(preset: Preset) {
     setGlyphs(withPreset(text, preset))
-    setSelectedPreset(preset.id)
+    setActivePreset(preset.id)
     setActiveIndex(null)
     setSelection({ start: 0, end: 0 })
-    setCopyStatus('idle')
+    setCopyState('idle')
   }
 
-  function resetFormatting() {
+  function resetStyles() {
     setGlyphs(Array.from(text, defaultGlyph))
-    setSelectedPreset(null)
+    setActivePreset(null)
     setActiveIndex(null)
     setSelection({ start: 0, end: 0 })
-    setCopyStatus('idle')
+    setCopyState('idle')
   }
 
-  function clearText() {
-    updateText('', 0, 0)
-    textareaRef.current?.focus()
+  function toggleStyle(style: 'bold' | 'underline', enabled: boolean) {
+    changeSelected((glyph) => ({ ...glyph, [style]: !enabled }))
   }
 
-  function toggleStyle(property: 'bold' | 'underline') {
-    const shouldEnable = !selectedIndexes.every((index) => glyphs[index][property])
-    applyToSelection((glyph) => ({ ...glyph, [property]: shouldEnable }))
-  }
-
-  async function copyOutput() {
+  async function copyToClipboard() {
     if (!canCopy) return
     try {
       await navigator.clipboard.writeText(output)
-      setCopyStatus('copied')
+      setCopyState('done')
     } catch {
-      setCopyStatus('error')
+      setCopyState('error')
     }
   }
 
   return (
-    <div className="app-shell">
-      <div className="page-glow page-glow-one" aria-hidden="true" />
-      <div className="page-glow page-glow-two" aria-hidden="true" />
-
-      <header className="site-header">
-        <div className="site-container header-inner">
-          <a className="brand" href="/" aria-label="Discord Colors home">
-            <span className="brand-symbol" aria-hidden="true">
-              <span>{'{'}</span><span className="brand-dot">●</span><span>{'}'}</span>
-            </span>
-            <span className="brand-word">discord<span>.colors</span></span>
+    <div className="site">
+      <header className="topbar">
+        <div className="layout topbar-inner">
+          <a href="/" className="wordmark" aria-label="Discord Colors home">
+            <span className="brand-bars" aria-hidden="true"><i /><i /><i /><i /></span>
+            Discord Colors
           </a>
-          <nav className="header-links" aria-label="External links">
-            <a href="https://gist.github.com/kkrypt0nn/a02506f3712ff2d1c8ca7c9e0aed7c06" target="_blank" rel="noopener noreferrer" className="header-guide">
-              ANSI guide <ArrowUpRight size={15} />
-            </a>
-            <a href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer" className="github-link" aria-label="View the source code on GitHub">
-              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.14.68-3.8-1.33-3.8-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.73 1.17 1.73 1.17 1 1.72 2.62 1.22 3.26.93.1-.73.39-1.22.71-1.5-2.5-.28-5.14-1.25-5.14-5.57 0-1.23.44-2.24 1.17-3.03-.12-.29-.51-1.44.11-3 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16.62 1.56.23 2.71.11 3 .73.79 1.17 1.8 1.17 3.03 0 4.33-2.64 5.28-5.16 5.56.4.35.76 1.04.76 2.1v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z" />
-              </svg> <span>GitHub</span>
-            </a>
-          </nav>
+          <a className="source-link" href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">
+            <Github size={17} aria-hidden="true" /> <span>GitHub</span>
+          </a>
         </div>
       </header>
 
-      <main className="site-container">
-        <section className="hero" aria-labelledby="hero-heading">
-          <div className="hero-tag"><span className="tag-light" /> THE DISCORD ANSI TEXT GENERATOR</div>
-          <h1 id="hero-heading">Make your messages <span className="rainbow-heading">stand out.</span></h1>
-          <p className="hero-description">
-            Give your Discord messages a little color. Pick a style, fine-tune every character,
-            and copy a message that's ready to paste.
-          </p>
-          <div className="hero-benefits" aria-label="Features">
-            <span><Check size={14} /> Free forever</span>
-            <span><Check size={14} /> No account needed</span>
-            <span><Check size={14} /> Works in your browser</span>
-          </div>
-        </section>
+      <main className="layout">
+        <div className="intro">
+          <h1>Give your Discord text some color.</h1>
+          <p>Write a message, choose your colors, and copy it into Discord.</p>
+        </div>
 
-        <section className="preset-section" aria-labelledby="preset-heading">
-          <div className="section-heading-row">
-            <div>
-              <div className="eyebrow">01 / QUICK START</div>
-              <h2 id="preset-heading">Pick a vibe <span className="subtle">or make your own</span></h2>
+        <div className="workspace">
+          <section className="editor" aria-labelledby="editor-title">
+            <div className="section-head">
+              <h2 id="editor-title">Your message</h2>
+              <button
+                className="quiet-link reset-link"
+                type="button"
+                onClick={() => {
+                  changeText('', 0, 0)
+                  inputRef.current?.focus()
+                }}
+                disabled={text.length === 0}
+              >
+                <X size={15} aria-hidden="true" /> Clear text
+              </button>
             </div>
-            <span className="section-hint"><Sparkles size={15} /> One-click presets</span>
-          </div>
-          <div className="preset-grid">
-            {PRESETS.map((preset) => (
-              <PresetCard
-                key={preset.id}
-                preset={preset}
-                selected={selectedPreset === preset.id}
-                onClick={() => applyPreset(preset)}
-              />
-            ))}
-          </div>
-        </section>
+            <textarea
+              id="message"
+              ref={inputRef}
+              className="message-field"
+              aria-label="Message to color"
+              placeholder="Type your message here…"
+              value={text}
+              maxLength={1200}
+              spellCheck={false}
+              onChange={(event) => changeText(
+                event.currentTarget.value,
+                event.currentTarget.selectionStart,
+                event.currentTarget.selectionEnd,
+              )}
+              onSelect={(event) => {
+                const start = event.currentTarget.selectionStart
+                const end = event.currentTarget.selectionEnd
+                setSelection({ start, end })
+                if (start !== end) setActiveIndex(null)
+              }}
+            />
+            <p className="field-help">Select part of your message to color just that text.</p>
 
-        <section className="workspace" aria-label="ANSI message generator">
-          <div className="workspace-left">
-            <div className="editor-panel">
-              <div className="panel-header">
-                <div className="panel-header-title">
-                  <span className="panel-icon"><Palette size={17} /></span>
-                  <div><div className="eyebrow">02 / CREATE</div><h2>Your message</h2></div>
-                </div>
-                <button type="button" className="text-action" onClick={resetFormatting} disabled={glyphs.length === 0}>
-                  <RotateCcw size={14} /> Reset styles
-                </button>
-              </div>
-
-              <label className="input-label" htmlFor="message-input">Type your message</label>
-              <div className="editor-input-wrap">
-                <textarea
-                  id="message-input"
-                  ref={textareaRef}
-                  className="message-input"
-                  value={text}
-                  maxLength={1200}
-                  spellCheck={false}
-                  placeholder="Type something colorful..."
-                  onChange={(event) => updateText(
-                    event.currentTarget.value,
-                    event.currentTarget.selectionStart,
-                    event.currentTarget.selectionEnd,
-                  )}
-                  onSelect={(event) => {
-                    const { selectionStart, selectionEnd } = event.currentTarget
-                    setSelection({ start: selectionStart, end: selectionEnd })
-                    if (selectionStart !== selectionEnd) setActiveIndex(null)
-                  }}
+            <div className="rule" />
+            <div className="control-label"><span>Quick colors</span></div>
+            <div className="preset-list" role="group" aria-label="Color presets">
+              {PRESETS.map((preset) => (
+                <PresetButton
+                  key={preset.id}
+                  preset={preset}
+                  active={activePreset === preset.id}
+                  onClick={() => usePreset(preset)}
                 />
-                <div className="input-footer">
-                  <span><MousePointer2 size={13} /> Select text here, or click a preview character to style it.</span>
-                  <button type="button" className="clear-button" onClick={clearText} disabled={text.length === 0}><X size={13} /> Clear</button>
-                </div>
-              </div>
-
-              <div className="format-topline">
-                <div className="input-label">Text formatting</div>
-                <div className="scope-pill"><span className="scope-dot" /> {scope}</div>
-              </div>
-              <div className="format-actions">
-                <button
-                  type="button"
-                  className={`format-button ${selectedIndexes.length > 0 && selectedIndexes.every((index) => glyphs[index].bold) ? 'format-active' : ''}`}
-                  onClick={() => toggleStyle('bold')}
-                  disabled={glyphs.length === 0}
-                  aria-pressed={selectedIndexes.length > 0 && selectedIndexes.every((index) => glyphs[index].bold)}
-                ><Bold size={16} /> Bold</button>
-                <button
-                  type="button"
-                  className={`format-button ${selectedIndexes.length > 0 && selectedIndexes.every((index) => glyphs[index].underline) ? 'format-active' : ''}`}
-                  onClick={() => toggleStyle('underline')}
-                  disabled={glyphs.length === 0}
-                  aria-pressed={selectedIndexes.length > 0 && selectedIndexes.every((index) => glyphs[index].underline)}
-                ><Underline size={16} /> Underline</button>
-                <button
-                  type="button"
-                  className="format-button format-clear"
-                  onClick={() => applyToSelection((glyph) => defaultGlyph(glyph.char))}
-                  disabled={glyphs.length === 0}
-                ><RotateCcw size={15} /> Clear formatting</button>
-              </div>
-
-              <div className="palette-divider" />
-              <div className="palette-section">
-                <div className="palette-title">
-                  <div><span className="palette-number">A</span><h3>Text color</h3></div>
-                  <button type="button" className="none-link" onClick={() => applyToSelection((glyph) => ({ ...glyph, fg: null }))} disabled={glyphs.length === 0}>Remove color</button>
-                </div>
-                <div className="swatch-grid">
-                  {FOREGROUND.map((color) => (
-                    <Swatch
-                      key={color.code}
-                      color={color}
-                      category="Text color"
-                      chosen={selectedIndexes.length > 0 && selectedIndexes.every((index) => glyphs[index].fg === color.code)}
-                      onClick={() => applyToSelection((glyph) => ({ ...glyph, fg: color.code }))}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="palette-section background-palette">
-                <div className="palette-title">
-                  <div><span className="palette-number palette-number-b">B</span><h3>Background color</h3></div>
-                  <button type="button" className="none-link" onClick={() => applyToSelection((glyph) => ({ ...glyph, bg: null }))} disabled={glyphs.length === 0}>Remove color</button>
-                </div>
-                <div className="swatch-grid">
-                  {BACKGROUND.map((color) => (
-                    <Swatch
-                      key={color.code}
-                      color={color}
-                      category="Background color"
-                      chosen={selectedIndexes.length > 0 && selectedIndexes.every((index) => glyphs[index].bg === color.code)}
-                      onClick={() => applyToSelection((glyph) => ({ ...glyph, bg: color.code }))}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="editor-tip"><Info size={16} /><p><strong>Pro tip:</strong> Highlight a word in the text box to style just that word. With nothing selected, changes apply to the whole message.</p></div>
+              ))}
             </div>
-          </div>
 
-          <div className="workspace-right">
-            <div className="preview-panel">
-              <div className="panel-header">
-                <div className="panel-header-title">
-                  <span className="panel-icon panel-icon-violet"><WandSparkles size={17} /></span>
-                  <div><div className="eyebrow">03 / PREVIEW</div><h2>See the magic</h2></div>
-                </div>
-                <span className="live-label"><span /> LIVE PREVIEW</span>
-              </div>
-              <p className="preview-intro">Here's approximately how your message will look in Discord on desktop.</p>
-              <div className="discord-window">
-                <div className="discord-topbar">
-                  <div className="discord-hash">#</div>
-                  <span>general</span>
-                  <span className="discord-channel-desc">Share something colorful</span>
-                  <span className="discord-dots" aria-hidden="true">•••</span>
-                </div>
-                <div className="discord-message">
-                  <div className="discord-avatar" aria-hidden="true">D</div>
-                  <div className="discord-content">
-                    <div className="discord-author"><span>you</span><span className="discord-timestamp">Today at 12:00 PM</span></div>
-                    <div className="discord-code" aria-label="Discord ANSI message preview">
-                      {glyphs.length === 0 ? (
-                        <span className="empty-preview">Your colorful message will appear here...</span>
-                      ) : glyphs.map((glyph, index) => (
-                        glyph.char === '\n'
-                          ? <br key={index} />
-                          : <button
-                              type="button"
-                              key={index}
-                              className={`preview-char ${activeIndex === index ? 'preview-char-active' : ''}`}
-                              onClick={() => {
-                                setActiveIndex(index)
-                                setSelection({ start: 0, end: 0 })
-                              }}
-                              aria-label={`Style character ${index + 1}: ${glyph.char === ' ' ? 'space' : glyph.char}`}
-                              aria-pressed={activeIndex === index}
-                              title="Click to style this character"
-                              style={{
-                                color: colorHex(glyph.fg, FOREGROUND, '#e8eaf0'),
-                                backgroundColor: colorHex(glyph.bg, BACKGROUND, 'transparent'),
-                                fontWeight: glyph.bold ? 750 : 400,
-                                textDecoration: glyph.underline ? 'underline' : 'none',
-                              }}
-                            >{glyph.char === ' ' ? '\u00a0' : glyph.char}</button>
-                      ))}
-                    </div>
+            <div className="rule" />
+            <div className="style-heading">
+              <h3>Customize</h3>
+              <button type="button" className="quiet-link reset-link" onClick={resetStyles} disabled={glyphs.length === 0}>
+                <RotateCcw size={14} aria-hidden="true" /> Reset styles
+              </button>
+            </div>
+            <p className="target-label" aria-live="polite">{targetLabel}</p>
+
+            <div className="format-controls" role="group" aria-label="Text formatting">
+              <button
+                type="button"
+                className={isBold ? 'format-option is-active' : 'format-option'}
+                aria-pressed={isBold}
+                onClick={() => toggleStyle('bold', isBold)}
+                disabled={glyphs.length === 0}
+              >
+                <Bold size={16} aria-hidden="true" /> Bold
+              </button>
+              <button
+                type="button"
+                className={isUnderlined ? 'format-option is-active' : 'format-option'}
+                aria-pressed={isUnderlined}
+                onClick={() => toggleStyle('underline', isUnderlined)}
+                disabled={glyphs.length === 0}
+              >
+                <Underline size={16} aria-hidden="true" /> Underline
+              </button>
+            </div>
+
+            <div className="palette-stack">
+              <ColorPicker
+                label="Text color"
+                colors={FOREGROUND}
+                selected={commonForeground}
+                onChoose={(code) => changeSelected((glyph) => ({ ...glyph, fg: code }))}
+                onRemove={() => changeSelected((glyph) => ({ ...glyph, fg: null }))}
+                disabled={glyphs.length === 0}
+              />
+              <ColorPicker
+                label="Background color"
+                colors={BACKGROUND}
+                selected={commonBackground}
+                onChoose={(code) => changeSelected((glyph) => ({ ...glyph, bg: code }))}
+                onRemove={() => changeSelected((glyph) => ({ ...glyph, bg: null }))}
+                disabled={glyphs.length === 0}
+              />
+            </div>
+          </section>
+
+          <section className="result" aria-labelledby="preview-title">
+            <div className="section-head preview-head">
+              <h2 id="preview-title">Preview</h2>
+              <span className="preview-note">Discord desktop</span>
+            </div>
+            <div className="discord-frame">
+              <div className="channel-name"><span aria-hidden="true">#</span> general</div>
+              <div className="chat-message">
+                <div className="avatar" aria-hidden="true">D</div>
+                <div className="chat-main">
+                  <div className="chat-name">You <span>Today</span></div>
+                  <div className="ansi-preview" aria-label="Preview of formatted message">
+                    {glyphs.length === 0
+                      ? <span className="empty-preview">Your message will appear here.</span>
+                      : glyphs.map((glyph, index) => glyph.char === '\n'
+                        ? <br key={index} />
+                        : <button
+                            key={index}
+                            type="button"
+                            className={activeIndex === index ? 'preview-char is-targeted' : 'preview-char'}
+                            aria-label={'Select character ' + (index + 1) + ': ' + (glyph.char === ' ' ? 'space' : glyph.char)}
+                            aria-pressed={activeIndex === index}
+                            title="Click to edit this character"
+                            onClick={() => {
+                              setActiveIndex(index)
+                              setSelection({ start: 0, end: 0 })
+                            }}
+                            style={{
+                              color: colorHex(glyph.fg, FOREGROUND, '#e6e8ed'),
+                              backgroundColor: colorHex(glyph.bg, BACKGROUND, 'transparent'),
+                              fontWeight: glyph.bold ? 700 : 400,
+                              textDecoration: glyph.underline ? 'underline' : 'none',
+                            }}
+                          >{glyph.char === ' ' ? '\u00a0' : glyph.char}</button>,
+                      )}
                   </div>
                 </div>
-                <div className="discord-bottom"><span>+</span> Message #general <span className="discord-emoji" aria-hidden="true">☺</span></div>
               </div>
-              <p className="preview-hint"><MousePointer2 size={14} /> Click any character above to customize it individually.</p>
             </div>
+            <p className="preview-tip">Click a character in the preview to style it on its own.</p>
 
-            <div className="export-panel">
-              <div className="panel-header">
-                <div className="panel-header-title">
-                  <span className="panel-icon panel-icon-blue"><Code2 size={17} /></span>
-                  <div><div className="eyebrow">04 / EXPORT</div><h2>Copy & paste</h2></div>
-                </div>
-                <span className="code-badge">ANSI</span>
-              </div>
-              <p className="export-description">This is the generated ANSI markup. Copy it with the button below, then paste it into a Discord message.</p>
-              <div className="code-output">
-                <div className="code-output-header"><span className="code-dot red-dot" /><span className="code-dot yellow-dot" /><span className="code-dot green-dot" /><span className="code-filename">message.ansi</span></div>
-                <pre aria-label="Readable ANSI markup"><code>{readableOutput}</code></pre>
-              </div>
-              <div className="limit-row">
-                <span>Discord message length</span>
-                <span className={overLimit ? 'limit-error' : 'limit-count'}>{messageLength.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()}</span>
-              </div>
-              <div className="limit-track"><div style={{ width: `${Math.min((messageLength / MAX_MESSAGE_LENGTH) * 100, 100)}%` }} className={overLimit ? 'limit-fill limit-fill-error' : 'limit-fill'} /></div>
-              {overLimit && <p className="validation-message">Your message exceeds Discord's 2,000-character limit. Try shorter text or fewer color changes.</p>}
-              {containsFence && <p className="validation-message">Messages containing triple backticks would end the ANSI code block early. Remove them before copying.</p>}
-              <button type="button" className={`copy-button ${copyStatus === 'copied' ? 'copy-button-done' : ''}`} disabled={!canCopy} onClick={copyOutput}>
-                {copyStatus === 'copied' ? <Check size={19} /> : <Copy size={19} />}
-                {copyStatus === 'copied' ? 'Copied to clipboard!' : 'Copy for Discord'}
-                <ArrowRight size={19} className="copy-arrow" />
+            <div className="copy-area">
+              <button type="button" className="copy-button" onClick={copyToClipboard} disabled={!canCopy}>
+                {copyState === 'done'
+                  ? <Check size={18} aria-hidden="true" />
+                  : <Copy size={18} aria-hidden="true" />}
+                {copyState === 'done' ? 'Copied!' : 'Copy for Discord'}
               </button>
-              {copyStatus === 'error' && <p className="validation-message">Clipboard access was blocked. Allow clipboard permissions and try again.</p>}
-              <p className="copy-footnote">Includes the code fence and real ANSI escape characters. Ready to paste.</p>
+              <span className={exceedsLimit ? 'character-count is-over' : 'character-count'}>
+                {output.length.toLocaleString()} / {MAX_MESSAGE_LENGTH.toLocaleString()}
+              </span>
+            </div>
+            <div className="feedback" role="status" aria-live="polite">
+              {copyState === 'done' && 'Paste the copied text into Discord.'}
+              {copyState === 'error' && 'Clipboard access was blocked. Allow access and try again.'}
+              {exceedsLimit && ' The formatted message exceeds Discord’s 2,000-character limit.'}
+              {containsFence && ' Remove triple backticks from your text before copying.'}
             </div>
 
-            <div className="compat-card">
-              <div className="compat-icon"><Info size={19} /></div>
-              <div>
-                <h3>A quick compatibility note</h3>
-                <p>Discord ANSI colors display on supported desktop clients. Mobile clients generally show plain text instead. This tool is unofficial and isn't affiliated with Discord.</p>
-                <a href="https://gist.github.com/kkrypt0nn/a02506f3712ff2d1c8ca7c9e0aed7c06" target="_blank" rel="noopener noreferrer">Read the original ANSI guide <ExternalLink size={13} /></a>
-              </div>
-            </div>
-          </div>
-        </section>
+            <details className="code-details">
+              <summary>View ANSI code</summary>
+              <pre><code>{readableOutput}</code></pre>
+            </details>
 
-        <section className="how-section" aria-labelledby="how-heading">
-          <div className="eyebrow">SIMPLE BY DESIGN</div>
-          <h2 id="how-heading">Colorful messages in three steps.</h2>
-          <div className="how-grid">
-            <div><span className="how-number">01</span><h3>Write your text</h3><p>Start with a message, or edit the example we've filled in.</p></div>
-            <div><span className="how-number">02</span><h3>Make it yours</h3><p>Choose a preset, select words, or color individual characters.</p></div>
-            <div><span className="how-number">03</span><h3>Paste into Discord</h3><p>Copy the ANSI block and send it in a desktop Discord chat.</p></div>
-          </div>
-        </section>
+            <p className="compatibility">
+              ANSI colors work in supported Discord desktop clients. Mobile Discord may show plain text.
+              {' '}<a href="https://gist.github.com/kkrypt0nn/a02506f3712ff2d1c8ca7c9e0aed7c06" target="_blank" rel="noopener noreferrer">ANSI guide</a>
+            </p>
+          </section>
+        </div>
       </main>
 
-      <footer className="site-footer">
-        <div className="site-container footer-inner">
-          <div className="footer-brand"><span className="footer-rainbow">● ● ●</span> discord.colors <span className="footer-muted">/ An unofficial community tool</span></div>
-          <div className="footer-links">
-            <a href="https://gist.github.com/kkrypt0nn/a02506f3712ff2d1c8ca7c9e0aed7c06" target="_blank" rel="noopener noreferrer">Original ANSI guide <ArrowUpRight size={13} /></a>
-            <a href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">Source code <Code2 size={14} /></a>
-          </div>
+      <footer className="footer">
+        <div className="layout footer-inner">
+          <span>Unofficial Discord tool</span>
+          <a href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">Source code</a>
         </div>
       </footer>
     </div>
