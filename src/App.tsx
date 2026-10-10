@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Bold, Check, Copy, Github, RotateCcw, Underline, X } from 'lucide-react'
+import { Bold, Check, Copy, RotateCcw, Underline, X } from 'lucide-react'
 import {
   affectedIndexes,
   BACKGROUND,
@@ -180,7 +180,7 @@ export default function App() {
             Discord Colors
           </a>
           <a className="source-link" href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">
-            <Github size={17} aria-hidden="true" /> <span>GitHub</span>
+            <span>GitHub</span>
           </a>
         </div>
       </header>
