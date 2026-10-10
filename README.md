@@ -52,11 +52,11 @@ No Cloudflare Functions, Workers, API tokens, or environment variables are neede
 
 Generated messages use the form:
 
-```text
+~~~text
 ```ansi
 ESC[1;31mHello ESC[1;34mworld ESC[0m
 ```
-```
+~~~
 
 `ESC` in the example above stands for the actual U+001B escape control character placed on the clipboard. The editor's code view shows the printable `\\u001b` representation so users can inspect the codes.
 
