@@ -33,20 +33,18 @@ npm run build
 
 The static output is generated in `dist/`.
 
-## Deploy to Cloudflare Pages
+## Deploy to Cloudflare
 
-In Cloudflare, create a **Pages** project connected to this GitHub repository using these settings:
+This project uses Cloudflare Workers Static Assets. The `cloudflare.config.ts` configuration has no Worker entrypoint, so Cloudflare serves the Vite build output as static files without running Worker code. Static asset requests are free and unlimited, including on the Free plan.
 
-| Setting | Value |
-| --- | --- |
-| Framework preset | React (Vite), or None |
-| Production branch | `main` |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-| Root directory | `/` |
-| Node version | `22` (`.node-version` included) |
+With Node.js 22.18 or newer and the `cf` CLI authenticated:
 
-No Cloudflare Functions, Workers, API tokens, or environment variables are needed. All text processing happens in the browser, so serving this site uses no Workers request allowance.
+```sh
+npm install
+npm run deploy
+```
+
+`cf deploy` builds the Vite app and deploys the output. The configured custom domain is `dc.glare.dev`.
 
 ## How the output works
 

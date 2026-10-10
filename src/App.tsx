@@ -7,7 +7,6 @@ import {
   Code2,
   Copy,
   ExternalLink,
-  Github,
   Info,
   MousePointer2,
   Palette,
@@ -190,7 +189,9 @@ export default function App() {
               ANSI guide <ArrowUpRight size={15} />
             </a>
             <a href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer" className="github-link" aria-label="View the source code on GitHub">
-              <Github size={19} /> <span>GitHub</span>
+              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.14.68-3.8-1.33-3.8-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.73 1.17 1.73 1.17 1 1.72 2.62 1.22 3.26.93.1-.73.39-1.22.71-1.5-2.5-.28-5.14-1.25-5.14-5.57 0-1.23.44-2.24 1.17-3.03-.12-.29-.51-1.44.11-3 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16.62 1.56.23 2.71.11 3 .73.79 1.17 1.8 1.17 3.03 0 4.33-2.64 5.28-5.16 5.56.4.35.76 1.04.76 2.1v3.08c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z" />
+              </svg> <span>GitHub</span>
             </a>
           </nav>
         </div>
@@ -447,7 +448,7 @@ export default function App() {
           <div className="footer-brand"><span className="footer-rainbow">● ● ●</span> discord.colors <span className="footer-muted">/ An unofficial community tool</span></div>
           <div className="footer-links">
             <a href="https://gist.github.com/kkrypt0nn/a02506f3712ff2d1c8ca7c9e0aed7c06" target="_blank" rel="noopener noreferrer">Original ANSI guide <ArrowUpRight size={13} /></a>
-            <a href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">Source code <Github size={14} /></a>
+            <a href="https://github.com/darbyjack/discord-colors" target="_blank" rel="noopener noreferrer">Source code <Code2 size={14} /></a>
           </div>
         </div>
       </footer>
